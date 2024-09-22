@@ -254,9 +254,29 @@ impl<T, K> WaitingState<T, K> {
                     if s.event.is_press() {
                         let (i, j) = s.event.coord();
                         let target = Event::Release(i, j);
-                        if stacked.iter().skip(x + 1).any(|s| s.event == target) {
-                            return Some(WaitingAction::Hold);
+
+                        let maybe_mod_release = stacked.iter().skip(x + 1).find(|s| self.is_corresponding_release(&s.event));
+                        let target_released = stacked.iter().skip(x + 1).any(|s| s.event == target);
+
+                        // initial press ... target press (s) ... initial release (m) ... target release (t)
+                        //
+                        // when time between m and s is small, treat as a tap (rolling keys)
+                        // when time between m and s is large, treat as a hold
+
+                        if let Some(m) = maybe_mod_release {
+                            // mod was released very soon after target was pressed
+                            // treat it as a tap
+                            if m.since.saturating_sub(s.since) < 100 {
+                                return Some(WaitingAction::Tap)
+                            }
                         }
+
+                        // mod was not released, or released fairly long after
+                        // pressing the target, treat as a hold
+                        if target_released {
+                            return Some(WaitingAction::Hold)
+                        }
+
                     }
                 }
             }
